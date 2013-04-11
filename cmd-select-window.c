@@ -93,10 +93,24 @@ cmd_select_window_prepare(struct cmd *self, struct cmd_q *cmdq)
 {
 	struct args		*args = self->args;
 	struct cmd_context	*cmd_ctx = cmdq->cmd_ctx;
+	int			 next, previous, last;
 
-	cmd_ctx->session = cmd_find_session(cmdq, args_get(args, 't'), 0);
-	cmd_ctx->wl = cmd_find_window(cmdq, args_get(args, 't'),
-			&cmd_ctx->session);
+	next = self->entry == &cmd_next_window_entry;
+	if (args_has(self->args, 'n'))
+		next = 1;
+	previous = self->entry == &cmd_previous_window_entry;
+	if (args_has(self->args, 'p'))
+		previous = 1;
+	last = self->entry == &cmd_last_window_entry;
+	if (args_has(self->args, 'l'))
+		last = 1;
+
+	if (next || previous || last)
+		cmd_ctx->session = cmd_find_session(cmdq,
+				args_get(args, 't'), 0);
+	else
+		cmd_ctx->wl = cmd_find_window(cmdq,
+				args_get(args, 't'), &cmd_ctx->session);
 }
 
 enum cmd_retval
