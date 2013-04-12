@@ -63,7 +63,7 @@ cmd_show_hooks_exec(struct cmd *self, struct cmd_q *cmdq)
 
 	hooks_ent = args_has(args, 'g') ? &global_hooks : &s->hooks;
 
-	RB_FOREACH(hook, hooks, hooks_ent) {
+	RB_FOREACH(hook, hooks_tree, &hooks_ent->tree) {
 		used = xsnprintf(tmp, sizeof tmp, "%s -> ", hook->name);
 		cmd_list_print(hook->cmdlist, tmp + used, (sizeof tmp) - used);
 		cmdq_print(cmdq, "%s", tmp);

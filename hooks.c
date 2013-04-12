@@ -18,14 +18,15 @@
 
 #include <sys/types.h>
 
-#include <ctype.h>
 #include <stdlib.h>
 
 #include <string.h>
 
 #include "tmux.h"
 
-RB_GENERATE(hooks, hook, entry, hooks_cmp);
+RB_GENERATE(hooks_tree, hook, entry, hooks_cmp);
+
+struct hook	*hooks_find1(struct hooks *, const char *);
 
 int
 hooks_cmp(struct hook *hook1, struct hook *hook2)
@@ -36,19 +37,8 @@ hooks_cmp(struct hook *hook1, struct hook *hook2)
 void
 hooks_init(struct hooks *hooks, struct hooks *copy)
 {
-	RB_INIT(hooks);
-
-	if (copy != NULL)
-		hooks_copy(copy, hooks);
-}
-
-void
-hooks_copy(struct hooks *src, struct hooks *dst)
-{
-	struct hook	*h;
-
-	RB_FOREACH(h, hooks, src)
-		hooks_add(dst, h->name, h->cmdlist);
+	RB_INIT(&hooks->tree);
+	hooks->parent = copy;
 }
 
 void
@@ -56,7 +46,7 @@ hooks_free(struct hooks *hooks)
 {
 	struct hook	*h, *h2;
 
-	RB_FOREACH_SAFE(h, hooks, hooks, h2)
+	RB_FOREACH_SAFE(h, hooks_tree, &hooks->tree, h2)
 		hooks_remove(hooks, h);
 }
 
@@ -65,7 +55,7 @@ hooks_add(struct hooks *hooks, const char *name, struct cmd_list *cmdlist)
 {
 	struct hook	*h;
 
-	if ((h = hooks_find(hooks, (char *)name)) != NULL)
+	if ((h = hooks_find1(hooks, name)) != NULL)
 		hooks_remove(hooks, h);
 
 	h = xcalloc(1, sizeof *h);
@@ -73,7 +63,7 @@ hooks_add(struct hooks *hooks, const char *name, struct cmd_list *cmdlist)
 	h->cmdlist = cmdlist;
 	h->cmdlist->references++;
 
-	RB_INSERT(hooks, hooks, h);
+	RB_INSERT(hooks_tree, &hooks->tree, h);
 }
 
 void
@@ -82,23 +72,35 @@ hooks_remove(struct hooks *hooks, struct hook *h)
 	if (h == NULL)
 		return;
 
-	RB_REMOVE(hooks, hooks, h);
+	RB_REMOVE(hooks_tree, &hooks->tree, h);
 	cmd_list_free(h->cmdlist);
 	free(h->name);
 	free(h);
 }
 
 struct hook *
+hooks_find1(struct hooks *hooks, const char *name)
+{
+	struct hook	h;
+
+	h.name = (char *) name;
+	return (RB_FIND(hooks_tree, &hooks->tree, &h));
+}
+
+struct hook *
 hooks_find(struct hooks *hooks, const char *name)
 {
-	struct hook	 h;
+	struct hook	 h, *he;
 
-	if (name == NULL)
-		return (NULL);
-
-	h.name = (char *)name;
-
-	return (RB_FIND(hooks, hooks, &h));
+	h.name = (char *) name;
+	he = RB_FIND(hooks_tree, &hooks->tree, &h);
+	while (he == NULL) {
+		hooks = hooks->parent;
+		if (hooks == NULL)
+			break;
+		he = RB_FIND(hooks_tree, &hooks->tree, &h);
+	}
+	return (he);
 }
 
 void

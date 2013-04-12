@@ -54,7 +54,7 @@ cmd_set_hook_exec(struct cmd *self, struct cmd_q *cmdq)
 	struct args	*args = self->args;
 	struct session	*s;
 	struct cmd_list	*cmdlist;
-	struct hooks	*hooks_ent;
+	struct hooks	*hooks;
 	struct hook	*hook;
 	char		*cause;
 	const char	*hook_name, *hook_cmd;
@@ -71,11 +71,11 @@ cmd_set_hook_exec(struct cmd *self, struct cmd_q *cmdq)
 		return (CMD_RETURN_ERROR);
 	}
 
-	hooks_ent = args_has(args, 'g') ? &global_hooks : &s->hooks;
+	hooks = args_has(args, 'g') ? &global_hooks : &s->hooks;
 
 	if (s != NULL && args_has(args, 'u')) {
-		hook = hooks_find(hooks_ent, (char *)hook_name);
-		hooks_remove(hooks_ent, hook);
+		hook = hooks_find(hooks, (char *)hook_name);
+		hooks_remove(hooks, hook);
 		return (CMD_RETURN_NORMAL);
 	}
 
@@ -87,7 +87,6 @@ cmd_set_hook_exec(struct cmd *self, struct cmd_q *cmdq)
 
 	if (cmd_string_parse(hook_cmd, &cmdlist, NULL, 0, &cause) != 0) {
 		if (cmdlist == NULL || cause != NULL) {
-			log_debug("Hook error: (%s)", cause);
 			cmdq_error(cmdq, "Hook error: (%s)", cause);
 			return (CMD_RETURN_ERROR);
 		}
@@ -96,6 +95,6 @@ cmd_set_hook_exec(struct cmd *self, struct cmd_q *cmdq)
 	if (cmdlist == NULL)
 		return (CMD_RETURN_ERROR);
 
-	hooks_add(hooks_ent, hook_name, cmdlist);
+	hooks_add(hooks, hook_name, cmdlist);
 	return (CMD_RETURN_NORMAL);
 }

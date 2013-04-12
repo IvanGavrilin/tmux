@@ -1081,7 +1081,11 @@ struct hook {
 	struct cmd_list	*cmdlist;
 	RB_ENTRY(hook)	 entry;
 };
-RB_HEAD(hooks, hook);
+
+struct hooks {
+	RB_HEAD(hooks_tree, hook) tree;
+	struct hooks	*parent;
+};
 
 /* Client session. */
 struct session_group {
@@ -1572,7 +1576,7 @@ void		 format_paste_buffer(struct format_tree *, struct paste_buffer *);
 
 /* hooks.c */
 int		 hooks_cmp(struct hook *, struct hook *);
-RB_PROTOTYPE(hooks, hook, entry, hooks_cmp);
+RB_PROTOTYPE(hooks_tree, hook, entry, hooks_cmp);
 void		 hooks_init(struct hooks *, struct hooks *);
 void		 hooks_free(struct hooks *);
 void		 hooks_add(struct hooks *, const char *, struct cmd_list *);
