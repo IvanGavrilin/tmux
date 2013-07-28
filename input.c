@@ -1399,36 +1399,43 @@ input_csi_dispatch_sgr(struct input_ctx *ictx)
 		return;
 	}
 
-	for (i = 0; i < ictx->param_list_len; i++) {
-		n = input_get(ictx, i, 0, 0);
+    for (i = 0; i < ictx->param_list_len; i++) {
+        n = input_get(ictx, i, 0, 0);
 
-		if (n == 38 || n == 48) {
-			i++;
-			if (input_get(ictx, i, 0, -1) != 5)
-				continue;
+        if (n == 38 || n == 48) {
+            int clrmode = input_get(ictx, ++i, 0, -1);
+            if (clrmode == 5) {
 
-			i++;
-			m = input_get(ictx, i, 0, -1);
-			if (m == -1) {
-				if (n == 38) {
-					gc->flags &= ~GRID_FLAG_FG256;
-					gc->fg = 8;
-				} else if (n == 48) {
-					gc->flags &= ~GRID_FLAG_BG256;
-					gc->bg = 8;
-				}
+                m = input_get(ictx, ++i, 0, -1);
+                if (m == -1) {
+                    if (n == 38) {
+                        gc->flags &= ~GRID_FLAG_FG256;
+                        gc->fg = 8;
+                    } else if (n == 48) {
+                        gc->flags &= ~GRID_FLAG_BG256;
+                        gc->bg = 8;
+                    }
 
-			} else {
-				if (n == 38) {
-					gc->flags |= GRID_FLAG_FG256;
-					gc->fg = m;
-				} else if (n == 48) {
-					gc->flags |= GRID_FLAG_BG256;
-					gc->bg = m;
-				}
-			}
-			continue;
-		}
+                } else {
+                    if (n == 38) {
+                        gc->flags |= GRID_FLAG_FG256;
+                        gc->fg = m;
+                    } else if (n == 48) {
+                        gc->flags |= GRID_FLAG_BG256;
+                        gc->bg = m;
+                    }
+                }
+            } else if (clrmode == 2) {
+                int r = input_get(ictx, ++i, 0, -1);
+                int g = input_get(ictx, ++i, 0, -1);
+                int b = input_get(ictx, ++i, 0, -1);
+                if (r != -1 && b != -1 && g != -1) {
+                    gc->fg = r*65536 + g * 256 + b;
+                    gc->flags |= (n == 38 ? GRID_FLAG_FGRGB : GRID_FLAG_BGRGB);
+                }
+            }
+            continue;
+        }
 
 		switch (n) {
 		case 0:
@@ -1481,11 +1488,11 @@ input_csi_dispatch_sgr(struct input_ctx *ictx)
 		case 35:
 		case 36:
 		case 37:
-			gc->flags &= ~GRID_FLAG_FG256;
+			gc->flags &= ~(GRID_FLAG_FG256|GRID_FLAG_FGRGB);
 			gc->fg = n - 30;
 			break;
 		case 39:
-			gc->flags &= ~GRID_FLAG_FG256;
+			gc->flags &= ~(GRID_FLAG_FG256|GRID_FLAG_FGRGB);
 			gc->fg = 8;
 			break;
 		case 40:
@@ -1496,13 +1503,14 @@ input_csi_dispatch_sgr(struct input_ctx *ictx)
 		case 45:
 		case 46:
 		case 47:
-			gc->flags &= ~GRID_FLAG_BG256;
+			gc->flags &= ~(GRID_FLAG_BG256|GRID_FLAG_BGRGB);
 			gc->bg = n - 40;
 			break;
 		case 49:
-			gc->flags &= ~GRID_FLAG_BG256;
+			gc->flags &= ~(GRID_FLAG_BG256|GRID_FLAG_BGRGB);
 			gc->bg = 8;
 			break;
+/*
 		case 90:
 		case 91:
 		case 92:
@@ -1511,7 +1519,7 @@ input_csi_dispatch_sgr(struct input_ctx *ictx)
 		case 95:
 		case 96:
 		case 97:
-			gc->flags &= ~GRID_FLAG_FG256;
+			gc->flags &= ~(GRID_FLAG_FG256;
 			gc->fg = n;
 			break;
 		case 100:
@@ -1525,6 +1533,7 @@ input_csi_dispatch_sgr(struct input_ctx *ictx)
 			gc->flags &= ~GRID_FLAG_BG256;
 			gc->bg = n - 10;
 			break;
+*/
 		}
 	}
 }

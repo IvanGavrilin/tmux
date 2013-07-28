@@ -38,8 +38,6 @@ int	tty_try_256(struct tty *, u_char, const char *);
 int	tty_try_88(struct tty *, u_char, const char *);
 
 void	tty_colours(struct tty *, const struct grid_cell *);
-void	tty_check_fg(struct tty *, struct grid_cell *);
-void	tty_check_bg(struct tty *, struct grid_cell *);
 void	tty_colours_fg(struct tty *, const struct grid_cell *);
 void	tty_colours_bg(struct tty *, const struct grid_cell *);
 
@@ -1323,10 +1321,6 @@ tty_attributes(struct tty *tty, const struct grid_cell *gc)
 		}
 	}
 
-	/* Fix up the colours if necessary. */
-	tty_check_fg(tty, &gc2);
-	tty_check_bg(tty, &gc2);
-
 	/* If any bits are being cleared, reset everything. */
 	if (tc->attr & ~gc2.attr)
 		tty_reset(tty);
@@ -1387,8 +1381,8 @@ tty_colours(struct tty *tty, const struct grid_cell *gc)
 	 * case if only one is default need to fall onward to set the other
 	 * colour.
 	 */
-	fg_default = (fg == 8 && !(flags & GRID_FLAG_FG256));
-	bg_default = (bg == 8 && !(flags & GRID_FLAG_BG256));
+	fg_default = (fg == 8 && !(flags & (GRID_FLAG_FG256|GRID_FLAG_FGRGB)));
+	bg_default = (bg == 8 && !(flags & (GRID_FLAG_BG256|GRID_FLAG_BGRGB)));
 	if (fg_default || bg_default) {
 		/*
 		 * If don't have AX but do have op, send sgr0 (op can't
@@ -1402,31 +1396,31 @@ tty_colours(struct tty *tty, const struct grid_cell *gc)
 			tty_reset(tty);
 		else {
 			if (fg_default &&
-			    (tc->fg != 8 || tc->flags & GRID_FLAG_FG256)) {
+			    (tc->fg != 8 || tc->flags & (GRID_FLAG_FG256|GRID_FLAG_FGRGB))) {
 				if (have_ax)
 					tty_puts(tty, "\033[39m");
 				else if (tc->fg != 7 ||
-				    tc->flags & GRID_FLAG_FG256)
+				    tc->flags & (GRID_FLAG_FG256|GRID_FLAG_FGRGB))
 					tty_putcode1(tty, TTYC_SETAF, 7);
 				tc->fg = 8;
-				tc->flags &= ~GRID_FLAG_FG256;
+				tc->flags &= ~(GRID_FLAG_FG256|GRID_FLAG_FGRGB);
 			}
 			if (bg_default &&
-			    (tc->bg != 8 || tc->flags & GRID_FLAG_BG256)) {
+			    (tc->bg != 8 || tc->flags & (GRID_FLAG_BG256|GRID_FLAG_BGRGB))) {
 				if (have_ax)
 					tty_puts(tty, "\033[49m");
 				else if (tc->bg != 0 ||
-				    tc->flags & GRID_FLAG_BG256)
+				    tc->flags & (GRID_FLAG_BG256|GRID_FLAG_BGRGB))
 					tty_putcode1(tty, TTYC_SETAB, 0);
 				tc->bg = 8;
-				tc->flags &= ~GRID_FLAG_BG256;
+				tc->flags &= ~(GRID_FLAG_BG256|GRID_FLAG_BGRGB);
 			}
 		}
 	}
 
 	/* Set the foreground colour. */
 	if (!fg_default && (fg != tc->fg ||
-	    ((flags & GRID_FLAG_FG256) != (tc->flags & GRID_FLAG_FG256))))
+	    ((flags & (GRID_FLAG_FG256|GRID_FLAG_FGRGB)) != (tc->flags & (GRID_FLAG_FG256|GRID_FLAG_FGRGB)))))
 		tty_colours_fg(tty, gc);
 
 	/*
@@ -1434,80 +1428,28 @@ tty_colours(struct tty *tty, const struct grid_cell *gc)
 	 * tty_colour_fg() can call tty_reset().
 	 */
 	if (!bg_default && (bg != tc->bg ||
-	    ((flags & GRID_FLAG_BG256) != (tc->flags & GRID_FLAG_BG256))))
+	    ((flags & (GRID_FLAG_BG256|GRID_FLAG_BGRGB)) != (tc->flags & (GRID_FLAG_BG256|GRID_FLAG_BGRGB)))))
 		tty_colours_bg(tty, gc);
-}
-
-void
-tty_check_fg(struct tty *tty, struct grid_cell *gc)
-{
-	u_int	colours;
-
-	/* Is this a 256-colour colour? */
-	if (gc->flags & GRID_FLAG_FG256) {
-		/* And not a 256 colour mode? */
-		if (!(tty->term->flags & TERM_88COLOURS) &&
-		    !(tty->term_flags & TERM_88COLOURS) &&
-		    !(tty->term->flags & TERM_256COLOURS) &&
-		    !(tty->term_flags & TERM_256COLOURS)) {
-			gc->fg = colour_256to16(gc->fg);
-			if (gc->fg & 8) {
-				gc->fg &= 7;
-				gc->attr |= GRID_ATTR_BRIGHT;
-			} else
-				gc->attr &= ~GRID_ATTR_BRIGHT;
-			gc->flags &= ~GRID_FLAG_FG256;
-		}
-		return;
-	}
-
-	/* Is this an aixterm colour? */
-	colours = tty_term_number(tty->term, TTYC_COLORS);
-	if (gc->fg >= 90 && gc->fg <= 97 && colours < 16) {
-		gc->fg -= 90;
-		gc->attr |= GRID_ATTR_BRIGHT;
-	}
-}
-
-void
-tty_check_bg(struct tty *tty, struct grid_cell *gc)
-{
-	u_int	colours;
-
-	/* Is this a 256-colour colour? */
-	if (gc->flags & GRID_FLAG_BG256) {
-		/*
-		 * And not a 256 colour mode? Translate to 16-colour
-		 * palette. Bold background doesn't exist portably, so just
-		 * discard the bold bit if set.
-		 */
-		if (!(tty->term->flags & TERM_88COLOURS) &&
-		    !(tty->term_flags & TERM_88COLOURS) &&
-		    !(tty->term->flags & TERM_256COLOURS) &&
-		    !(tty->term_flags & TERM_256COLOURS)) {
-			gc->bg = colour_256to16(gc->bg);
-			if (gc->bg & 8)
-				gc->bg &= 7;
-			gc->attr &= ~GRID_ATTR_BRIGHT;
-			gc->flags &= ~GRID_FLAG_BG256;
-		}
-		return;
-	}
-
-	/* Is this an aixterm colour? */
-	colours = tty_term_number(tty->term, TTYC_COLORS);
-	if (gc->bg >= 90 && gc->bg <= 97 && colours < 16) {
-		gc->bg -= 90;
-		gc->attr |= GRID_ATTR_BRIGHT;
-	}
 }
 
 void
 tty_colours_fg(struct tty *tty, const struct grid_cell *gc)
 {
 	struct grid_cell	*tc = &tty->cell;
-	u_char			 fg = gc->fg;
-	char			 s[32];
+	int			 fg = gc->fg;
+	char			 s[64];
+
+    if (gc->flags & GRID_FLAG_FGRGB) {
+        int b = fg%256;
+        int g = (fg/256) % 256;
+        int r = fg / 65536;
+        xsnprintf(s, sizeof s, "\033[38;2;%d;%d;%dm", r, g, b);
+        tty_puts(tty, s);
+        tc->fg = fg;
+        tc->flags &= ~GRID_FLAG_FG256;
+        tc->flags |= GRID_FLAG_FGRGB;
+        return;
+    }
 
 	/* Is this a 256-colour colour? */
 	if (gc->flags & GRID_FLAG_FG256) {
@@ -1533,7 +1475,7 @@ tty_colours_fg(struct tty *tty, const struct grid_cell *gc)
 save_fg:
 	/* Save the new values in the terminal current cell. */
 	tc->fg = fg;
-	tc->flags &= ~GRID_FLAG_FG256;
+	tc->flags &= ~(GRID_FLAG_FG256|GRID_FLAG_FGRGB);
 	tc->flags |= gc->flags & GRID_FLAG_FG256;
 }
 
@@ -1541,8 +1483,20 @@ void
 tty_colours_bg(struct tty *tty, const struct grid_cell *gc)
 {
 	struct grid_cell	*tc = &tty->cell;
-	u_char			 bg = gc->bg;
-	char			 s[32];
+	int			 bg = gc->bg;
+	char			 s[64];
+
+    if (gc->flags & GRID_FLAG_BGRGB) {
+        int b = bg%256;
+        int g = (bg/256) % 256;
+        int r = bg / 65536;
+        xsnprintf(s, sizeof s, "\033[48;2;%d;%d;%dm", r, g, b);
+        tty_puts(tty, s);
+        tc->bg = bg;
+        tc->flags &= ~GRID_FLAG_BG256;
+        tc->flags |= GRID_FLAG_BGRGB;
+        return;
+    }
 
 	/* Is this a 256-colour colour? */
 	if (gc->flags & GRID_FLAG_BG256) {
@@ -1573,7 +1527,7 @@ tty_colours_bg(struct tty *tty, const struct grid_cell *gc)
 save_bg:
 	/* Save the new values in the terminal current cell. */
 	tc->bg = bg;
-	tc->flags &= ~GRID_FLAG_BG256;
+	tc->flags &= ~(GRID_FLAG_BG256|GRID_FLAG_BGRGB);
 	tc->flags |= gc->flags & GRID_FLAG_BG256;
 }
 

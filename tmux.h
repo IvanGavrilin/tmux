@@ -480,6 +480,7 @@ struct msg_identify_data {
 #define IDENTIFY_88COLOURS 0x4
 #define IDENTIFY_CONTROL 0x8
 #define IDENTIFY_TERMIOS 0x10
+#define IDENTIFY_RGBCOLOURS 0x20
 	int		flags;
 };
 
@@ -710,19 +711,21 @@ struct utf8_data {
 #define GRID_FLAG_FG256 0x1
 #define GRID_FLAG_BG256 0x2
 #define GRID_FLAG_PADDING 0x4
+#define GRID_FLAG_FGRGB 0x8
+#define GRID_FLAG_BGRGB 0x10
 
 /* Grid line flags. */
 #define GRID_LINE_WRAPPED 0x1
 
 /* Grid cell data. */
 struct grid_cell {
-	u_char	attr;
-	u_char	flags;
-	u_char	fg;
-	u_char	bg;
+    u_char	attr;
+    u_char	flags;
+    int     fg;
+    int     bg;
 
-	u_char	xstate; /* top 4 bits width, bottom 4 bits size */
-	u_char	xdata[UTF8_SIZE];
+    u_char	xstate; /* top 4 bits width, bottom 4 bits size */
+    u_char	xdata[UTF8_SIZE];
 } __packed;
 
 /* Grid line. */
